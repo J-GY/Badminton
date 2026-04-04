@@ -1,5 +1,7 @@
 # TRIDENT
 
+![Poster](assets/poster.png)
+
 ## Installation
 
 To install the required dependencies, please use the following command to install from `requirement.yml`:
