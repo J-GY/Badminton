@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.font_manager as fm
 
+WORD_SIZE = 20
+WORD_SIZE_S = 16
 def plot_badminton_shot_analysis(
     df_raw, 
     z_axis_max_limit=None, 
@@ -53,21 +55,21 @@ def plot_badminton_shot_analysis(
             # '長球': '防守性擊球', 
             # '平球': '防守性擊球', 
             # '挑球': '防守性擊球',
-            '殺球': 'Attack Shot', 
-            '推撲球': 'Attack Shot', 
-            '切球': 'Attack Shot',
-            '網前小球': 'Defense Shot', 
-            '長球': 'Defense Shot', 
-            '平球': 'Defense Shot', 
-            '挑球': 'Defense Shot',
+            '殺球': 'Offensive Shot', 
+            '推撲球': 'Offensive Shot', 
+            '切球': 'Offensive Shot',
+            '網前小球': 'Defensive Shot', 
+            '長球': 'Defensive Shot', 
+            '平球': 'Defensive Shot', 
+            '挑球': 'Defensive Shot',
         }
 
     Y_CATEGORIES = ['Forecourt', 'Midcourt', 'Backcourt']
     # COLOR_CATEGORIES = ['攻擊性擊球', '防守性擊球']
-    COLOR_CATEGORIES = ['Attack Shot', 'Defense Shot']
+    COLOR_CATEGORIES = ['Offensive Shot', 'Defensive Shot']
     y_mapping = {cat: i for i, cat in enumerate(Y_CATEGORIES)}
     # colors_list = {'攻擊性擊球': 'red', '防守性擊球': 'blue'} 
-    colors_list = {'Attack Shot': 'red', 'Defense Shot': 'blue'} 
+    colors_list = {'Offensive Shot': 'red', 'Defensive Shot': 'blue'} 
 
     try:
         font_path = fm.findfont(fm.FontProperties(family='Microsoft JhengHei'))
@@ -112,7 +114,7 @@ def plot_badminton_shot_analysis(
 
     print("\n--- Data Distribution Summary ---")
     print("Shot Type Ratio (based on actual count sum):\n", df_agg.groupby('ShotType')['Count'].sum().pipe(lambda x: x / x.sum()).round(2))
-    print("Zone Distribution of Defensive Shots (based on actual count sum):\n", df_agg[df_agg['ShotType'] == 'Defense Shot'].groupby('Zone')['Count'].sum().pipe(lambda x: x / x.sum()).round(2))
+    print("Zone Distribution of Defensive Shots (based on actual count sum):\n", df_agg[df_agg['ShotType'] == 'Defensive Shot'].groupby('Zone')['Count'].sum().pipe(lambda x: x / x.sum()).round(2))
     print("--------------------\n")
 
     os.makedirs(save_dir_3d, exist_ok=True)
@@ -134,25 +136,28 @@ def plot_badminton_shot_analysis(
             label=shot_type 
         )
 
-    ax.set_xlabel('Angle', fontsize=12, labelpad=10)
+    ax.set_xlabel('Angle', fontsize=WORD_SIZE, labelpad=10)
     ax.set_xlim(0, 90)
-    ax.set_ylabel('Hitting zone', fontsize=12, labelpad=10)
+    ax.set_ylabel('Hitting zone', fontsize=WORD_SIZE, labelpad=20)
     ax.set_yticks(list(y_mapping.values()))
     ax.set_yticklabels(Y_CATEGORIES)
-    ax.set_zlabel('Count', fontsize=12, labelpad=10)
-    
+    ax.set_zlabel('Count', fontsize=WORD_SIZE, labelpad=10)
+    ax.tick_params(axis='both', which='major', labelsize=WORD_SIZE_S)
+    ax.legend(fontsize=WORD_SIZE_S)
+
     if z_axis_max_limit is not None:
         ax.set_zlim(0, z_axis_max_limit)
     else:
         ax.set_zlim(0, max_count * 1.1) 
 
     try:
-        plt.tight_layout(pad=2.0)
+        plt.tight_layout(pad=3.0)
+        plt.subplots_adjust(left=0.05, right=0.75, top=0.95, bottom=0.15)
     except UserWarning:
         pass
     zone_col_name = column_map['Zone']
     save_path_3d = os.path.join(save_dir_3d, f'3d_{zone_col_name}_plot_by_ball_type.png')
-    plt.savefig(save_path_3d, bbox_inches='tight')
+    plt.savefig(save_path_3d, bbox_inches='tight',pad_inches=0.5)
     plt.show()
 
     N_BINS = 5
@@ -177,11 +182,14 @@ def plot_badminton_shot_analysis(
             ax_bar.bar(current_x, summary_df[shot_type], width, label=shot_type, color=color, alpha=0.8)
         current_x += width 
 
-    ax_bar.set_xlabel('Angle intervals', fontsize=12)
-    ax_bar.set_ylabel('Count', fontsize=12)
+    ax_bar.set_xlabel('Angle intervals', fontsize=WORD_SIZE)
+    ax_bar.set_ylabel('Count', fontsize=WORD_SIZE)
     ax_bar.set_xticks(x)
     ax_bar.set_xticklabels(bin_labels, rotation=45, ha='right')
     ax_bar.grid(axis='y', linestyle='--', alpha=0.7)
+    ax_bar.set_xticklabels(bin_labels, rotation=45, ha='right', fontsize=WORD_SIZE_S)
+    ax_bar.tick_params(axis='y', labelsize=WORD_SIZE_S)
+    ax_bar.legend(fontsize=WORD_SIZE_S)
 
     plt.tight_layout()
     save_path_bar = os.path.join(save_dir_bar, 'grouped_angle_ball_type_nolable.png')
@@ -237,8 +245,8 @@ def plot_badminton_up_down_analysis(
 
     if shottype_map is None:
         shottype_map = {
-            1: 'Defense Shot', # 1 防守 (下到上)
-            2: 'Attack Shot', # 2 進攻 (上到下)
+            1: 'Defensive Shot', # 1 防守 (下到上)
+            2: 'Offensive Shot', # 2 進攻 (上到下)
             0: 'Other Shot'  # 0 其他
             # 1: '防守球', # 1 防守 (下到上)
             # 2: '進攻球', # 2 進攻 (上到下)
@@ -246,9 +254,9 @@ def plot_badminton_up_down_analysis(
         }
 
     Y_CATEGORIES = ['Forecourt', 'Midcourt', 'Backcourt']
-    COLOR_CATEGORIES = ['Attack Shot', 'Defense Shot', 'Other Shot']
+    COLOR_CATEGORIES = ['Offensive Shot', 'Defensive Shot', 'Other Shot']
     y_mapping = {cat: i for i, cat in enumerate(Y_CATEGORIES)}
-    colors_list = {'Attack Shot': 'red', 'Defense Shot': 'blue', 'Other Shot': 'green'} 
+    colors_list = {'Offensive Shot': 'red', 'Defensive Shot': 'blue', 'Other Shot': 'green'} 
 
     # --- 1. 設定中文字體 ---
     try:
@@ -302,7 +310,7 @@ def plot_badminton_up_down_analysis(
 
     print("\n--- Data Distribution Summary ---")
     print("Shot Type Ratio (based on actual count sum):\n", df_agg.groupby('ShotType')['Count'].sum().pipe(lambda x: x / x.sum()).round(2))
-    print("Zone Distribution of Defensive Shots (based on actual count sum):\n", df_agg[df_agg['ShotType'] == 'Defense Shot'].groupby('Zone')['Count'].sum().pipe(lambda x: x / x.sum()).round(2))
+    print("Zone Distribution of Defensive Shots (based on actual count sum):\n", df_agg[df_agg['ShotType'] == 'Defensive Shot'].groupby('Zone')['Count'].sum().pipe(lambda x: x / x.sum()).round(2))
     print("--------------------\n")
 
     os.makedirs(save_dir_3d, exist_ok=True)
@@ -323,25 +331,28 @@ def plot_badminton_up_down_analysis(
             label=shot_type 
         )
 
-    ax.set_xlabel('Angle', fontsize=12, labelpad=10)
+    ax.set_xlabel('Angle', fontsize=WORD_SIZE, labelpad=10)
     ax.set_xlim(0, 90)
-    ax.set_ylabel('Hitting zone', fontsize=12, labelpad=10)
+    ax.set_ylabel('Hitting zone', fontsize=WORD_SIZE, labelpad=20)
     ax.set_yticks(list(y_mapping.values()))
     ax.set_yticklabels(Y_CATEGORIES)
-    ax.set_zlabel('Count', fontsize=12, labelpad=10)
-    
+    ax.set_zlabel('Count', fontsize=WORD_SIZE, labelpad=10)
+    ax.tick_params(axis='both', which='major', labelsize=WORD_SIZE_S)
+    ax.legend(fontsize=WORD_SIZE_S)
+
     if z_axis_max_limit is not None:
         ax.set_zlim(0, z_axis_max_limit)
     else:
         ax.set_zlim(0, max_count * 1.1) 
 
     try:
-        plt.tight_layout(pad=2.0)
+        plt.tight_layout(pad=3.0)
+        plt.subplots_adjust(left=0.05, right=0.75, top=0.95, bottom=0.15)
     except UserWarning:
         pass
     zone_col_name = column_map['Zone']
     save_path_3d = os.path.join(save_dir_3d, f'3d_{zone_col_name}_plot_by_up_down.png')
-    plt.savefig(save_path_3d, bbox_inches='tight')
+    plt.savefig(save_path_3d, bbox_inches='tight', pad_inches=0.5)
     plt.show()
 
     N_BINS = 5
@@ -367,11 +378,14 @@ def plot_badminton_up_down_analysis(
             ax_bar.bar(current_x, summary_df[shot_type], width, label=shot_type, color=color, alpha=0.8)
         current_x += width 
 
-    ax_bar.set_xlabel('Angle intervals', fontsize=12)
-    ax_bar.set_ylabel('Count', fontsize=12)
+    ax_bar.set_xlabel('Angle intervals', fontsize=WORD_SIZE)
+    ax_bar.set_ylabel('Count', fontsize=WORD_SIZE)
     ax_bar.set_xticks(x)
     ax_bar.set_xticklabels(bin_labels, rotation=45, ha='right')
     ax_bar.grid(axis='y', linestyle='--', alpha=0.7)
+    ax_bar.set_xticklabels(bin_labels, rotation=45, ha='right', fontsize=WORD_SIZE_S)
+    ax_bar.tick_params(axis='y', labelsize=WORD_SIZE_S)
+    ax_bar.legend(fontsize=WORD_SIZE_S)
 
     plt.tight_layout()
     save_path_bar = os.path.join(save_dir_bar, 'grouped_angle_up_down_nolable.png')
