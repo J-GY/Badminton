@@ -232,20 +232,23 @@ def cal_angle(row: pd.Series) -> float:
 def process_partner_angle(df: pd.DataFrame) -> pd.DataFrame:
     """calculate the partner angle and group it according to the global constants."""
     df['Partner_Angle'] = df.apply(cal_angle, axis=1)
-    
-    df['Angle_Bin'] = ANGLE_ERROR_BIN 
 
-    valid_indices = df['Partner_Angle'] != ANGLE_ERROR_CODE
-    valid_angles = df.loc[valid_indices, 'Partner_Angle']
+    valid_mask = (
+        df['Partner_Angle'].notna() &
+        (df['Partner_Angle'] != ANGLE_ERROR_CODE)
+    )
 
-    df.loc[valid_indices, 'Angle_Bin'] = pd.cut(
-        valid_angles,
+    df['Angle_Bin'] = ANGLE_ERROR_BIN
+
+    df.loc[valid_mask, 'Angle_Bin'] = pd.cut(
+        df.loc[valid_mask, 'Partner_Angle'],
         bins=ANGLE_BINS,
         labels=ANGLE_BIN_LABELS,
         right=True,
-        include_lowest=True,
-        ordered=False
-    ).astype(int) 
+        include_lowest=True
+    )
+
+    df['Angle_Bin'] = df['Angle_Bin'].astype(float).fillna(ANGLE_ERROR_BIN).astype(int)
 
     print("\n--- Partner Angle Bin result ---")
     print(df['Angle_Bin'].value_counts().sort_index())
