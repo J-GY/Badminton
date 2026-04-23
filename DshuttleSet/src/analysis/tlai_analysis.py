@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -145,7 +147,8 @@ def analyze_defense_aai(df_analysis, shots_to_end_limit=2, selected_type=['Â∞çÊâ
     
     plt.subplots_adjust(left=0.1, right=0.95, top=0.85, bottom=0.15)
     
-    plt.savefig('aai_defender_threshold_analysis.pdf', dpi=400) 
+    os.makedirs('./img/Coordination Analysis', exist_ok=True)
+    plt.savefig('./img/Coordination Analysis/tlai_threshold_analysis.pdf', dpi=400) 
     plt.show()
 
     return bin_stats

@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -23,110 +25,6 @@ zone_patches = {
     # Zone -1 錯誤區域
     -1: (0, 67.1, 61, 134)
 }
-
-def analyze_overall_team_performance(df):
-    """
-    執行整體隊伍的綜合戰術分析：
-    1. 陣型得分效率
-    2. 致勝球種分佈
-    3. 失分原因結構
-    4. 防守失敗率熱點圖 (呼叫 analyze_defensive_failure_rate)
-    """
-    print("=== 開始執行整體隊伍綜合分析 ===")
-    
-    # --- 前置準備 ---
-    cols = ['shot_num', 'shot_count', 'score_team', 'set_win', 'match_id']
-    for c in cols:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors='coerce')
-            
-    df_last = df[df['shot_num'] == df['shot_count']].copy()
-    
-    if df_last.empty:
-        print("無有效數據。")
-        return
-
-    # 判斷贏家
-    def get_winner_info(row):
-        try:
-            s_win = int(row['set_win'])
-            sc_team = int(row['score_team'])
-        except:
-            return pd.Series([np.nan, np.nan])
-            
-        if s_win == 0: 
-            winner_id = 0.0 if sc_team == 0 else 1.0
-        else: 
-            winner_id = 1.0 if sc_team == 0 else 0.0
-            
-        if winner_id == 0.0:
-            fmt = row.get('match_Winner_formation', np.nan)
-        else:
-            fmt = row.get('match_Loser_formation', np.nan)
-            
-        return pd.Series([winner_id, fmt])
-
-    df_last[['rally_winner_id', 'winner_formation']] = df_last.apply(get_winner_info, axis=1)
-    df_last = df_last.dropna(subset=['rally_winner_id', 'winner_formation'])
-
-    # 設定繪圖風格
-    sns.set_style("whitegrid")
-    plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei'] 
-    plt.rcParams['axes.unicode_minus'] = False
-
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-
-    # 1. 陣型得分效率
-    fmt_counts = df_last['winner_formation'].value_counts()
-    fmt_counts = fmt_counts[fmt_counts.index.isin(['Attack', 'Defense'])]
-    
-    if not fmt_counts.empty:
-        colors = {'Attack': '#EA4335', 'Defense': '#4285F4'}
-        pie_colors = [colors.get(x, 'gray') for x in fmt_counts.index]
-        axes[0].pie(fmt_counts, labels=fmt_counts.index, autopct='%1.1f%%', 
-                    startangle=90, colors=pie_colors, explode=(0.05, 0))
-        axes[0].set_title('得分時的陣型分佈', fontsize=14, weight='bold')
-    else:
-        axes[0].text(0.5, 0.5, '無陣型數據', ha='center')
-
-    # 2. 致勝球種
-    if 'lose_reason' not in df_last.columns and 'lose_reason_x' in df_last.columns:
-        df_last['lose_reason'] = df_last['lose_reason_x']
-    df_last['lose_reason'] = df_last['lose_reason'].astype(str).str.strip()
-    
-    winning_shots = df_last[df_last['lose_reason'].isin(['對手落地致勝', '落地致勝'])]
-    
-    if not winning_shots.empty:
-        shot_counts = winning_shots['ball_type'].value_counts().head(8)
-        sns.barplot(x=shot_counts.values, y=shot_counts.index, ax=axes[1], palette='viridis')
-        axes[1].set_title('致勝球種排名 (Top 8)', fontsize=14, weight='bold')
-        for i, v in enumerate(shot_counts.values):
-            axes[1].text(v + 0.5, i, str(v), va='center')
-    else:
-        axes[1].text(0.5, 0.5, '無致勝球數據', ha='center')
-
-    # 3. 失分結構
-    def categorize_error(reason):
-        if reason in ['掛網', '未過網', '出界']: return '主動失誤 (Unforced)'
-        elif reason in ['對手落地致勝', '落地致勝']: return '受迫失分 (Forced)'
-        else: return '其他'
-
-    df_last['error_type'] = df_last['lose_reason'].apply(categorize_error)
-    error_counts = df_last[df_last['error_type'] != '其他']['error_type'].value_counts()
-    
-    if not error_counts.empty:
-        sns.barplot(x=error_counts.index, y=error_counts.values, ax=axes[2], palette=['#FF9900', '#9900FF'])
-        axes[2].set_title('失分原因結構分析', fontsize=14, weight='bold')
-        total = error_counts.sum()
-        for i, v in enumerate(error_counts.values):
-            pct = (v / total) * 100
-            axes[2].text(i, v + total*0.02, f'{v}\n({pct:.1f}%)', ha='center', weight='bold')
-    else:
-        axes[2].text(0.5, 0.5, '無失分原因數據', ha='center')
-
-    plt.tight_layout()
-    plt.show()
-
 
 def draw_court_background_green(ax, full_wid=61.0, half_len=67.0):
     """繪製標準羽球半場 (全綠底 + 白線風格) + 座標標記"""
@@ -211,14 +109,6 @@ def draw_failure_heatmap_green(ax, failure_rate, total_attempts, total_failures,
 
 def analyze_defensive_failure_rate(df, match_id=None, set_num=None, 
                                    start_rally_id=None, end_rally_id=None, event_type=None):
-    """
-    分析防守失敗率 (被落地致勝 / 被攻擊總數)。
-    輸出三張圖: 攻擊陣型下被得分率, 防守陣型下被得分率, 整體被得分率。
-    """
-    
-    # =========================================================
-    # 【前半部：資料清洗與數據計算，完全保持你原本的邏輯不變】
-    # =========================================================
     try:
         df_filtered, filter_suffix = df_filter_by_conditions(
             df, match_id=match_id, set_num=set_num, 
@@ -232,8 +122,6 @@ def analyze_defensive_failure_rate(df, match_id=None, set_num=None,
         print("無符合條件的數據。")
         return
         
-    print(f"--- 執行防守失敗率分析 (3 Charts) ---")
-
     cols = ['shot_num', 'shot_count', 'score_team', 'set_win', 'match_id', 'player', 'A', 'B', 'C', 'D']
     for c in cols:
         if c in df_filtered.columns: df_filtered[c] = pd.to_numeric(df_filtered[c], errors='coerce')
@@ -351,12 +239,6 @@ def analyze_defensive_failure_rate(df, match_id=None, set_num=None,
     ovr_rate_defense = calc_overall_rate(fail_defense, att_defense)
     ovr_rate_overall = calc_overall_rate(fail_overall, att_overall)
 
-                        
-    # =========================================================
-    # 【後半部：根據 Event 自動調整標題與檔名，並分開輸出】
-    # =========================================================
-    
-    # 1. 自動判斷賽事項目，設定標題前綴與檔名後綴
     if event_type == 1:
         event_title = "Men's Doubles"
         file_suffix = "MD"
@@ -372,34 +254,30 @@ def analyze_defensive_failure_rate(df, match_id=None, set_num=None,
 
     # 2. 定義單張圖表輸出函數
     def save_single_heatmap(rate_data, att_data, fail_data, title_text, filename):
-        fig, ax = plt.subplots(figsize=(6, 8)) 
+        fig, ax = plt.subplots(figsize=(6, 6)) 
         
-        # 統一使用 'Reds'，並帶入自訂標題
         draw_failure_heatmap_green(ax, rate_data, att_data, fail_data, title_text, 'Reds')
         
         fig.patch.set_facecolor('#90C080')
         plt.tight_layout()
-        plt.savefig(f'./img/defensive_failure/{filename}', dpi=300, bbox_inches='tight', facecolor='#90C080')
+        os.makedirs('./img/Coordination Analysis', exist_ok=True)
+        plt.savefig(f'./img/Coordination Analysis/{filename}', dpi=400)
         plt.show() 
-        print(f"圖表已成功儲存: {filename}")
 
-    # 3. 輸出【攻擊陣型】獨立圖檔 (乾淨標題版)
     save_single_heatmap(
         rate_attack, att_attack, fail_attack,
         f"{event_title} - Offensive ({ovr_rate_attack:.1f}%)",
-        f'defensive_vulnerability_offensive_{file_suffix}.png'
+        f'defensive_vulnerability_offensive_{file_suffix}.pdf'
     )
 
-    # 4. 輸出【防守陣型】獨立圖檔 (乾淨標題版)
     save_single_heatmap(
         rate_defense, att_defense, fail_defense,
         f"{event_title} - Defensive ({ovr_rate_defense:.1f}%)",
-        f'defensive_vulnerability_defensive_{file_suffix}.png'
+        f'defensive_vulnerability_defensive_{file_suffix}.pdf'
     )
 
-    # 5. 輸出【整體數據】獨立圖檔 (乾淨標題版)
     save_single_heatmap(
         rate_overall, att_overall, fail_overall,
         f"{event_title} - Overall ({ovr_rate_overall:.1f}%)",
-        f'defensive_vulnerability_overall_{file_suffix}.png'
+        f'defensive_vulnerability_overall_{file_suffix}.pdf'
     )

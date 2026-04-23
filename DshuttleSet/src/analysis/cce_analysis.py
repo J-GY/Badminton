@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -141,7 +143,8 @@ def global_cce_analysis(df, match_id=None,
 
         plt.subplots_adjust(left=0.1, right=0.95, top=0.85, bottom=0.15)
 
-        plt.savefig('Court_Coverage.pdf', dpi=400)
+        os.makedirs('./img/Coordination Analysis', exist_ok=True)
+        plt.savefig('./img/Coordination Analysis/Court_Coverage.pdf', dpi=400)
         plt.show()
         
     except Exception as e:

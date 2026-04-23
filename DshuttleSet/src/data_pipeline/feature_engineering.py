@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import Dict, List
-
+import os
 # --- 1. global constants ---
 
 # Y axis
@@ -36,18 +36,6 @@ CLASSIFICATION_MAP = {
     '長球': '長球',
     '發長球': '發長球', '發短球': '發短球'
 }
-
-# --- 2. load data ---
-
-def load_data(filename: str) -> pd.DataFrame:
-    """載入 CSV 數據並處理 FileNotFoundError。"""
-    try:
-        df = pd.read_csv(filename)
-        print(f"✅ CSV 數據 '{filename}' 已成功載入！")
-        return df
-    except FileNotFoundError:
-        print(f"❌ 錯誤：找不到 '{filename}' 文件。")
-        return pd.DataFrame()
 
 # --- 3. ball type classification ---
 
@@ -308,6 +296,82 @@ def clean_return_height(df: pd.DataFrame) -> pd.DataFrame:
     
     return df_clean
 
+def caculate_analysis_col(df_analysis,selected_type, shot_to_end):
+    cols_to_numeric = ['player', 'score_team', 'shot_num', 'shot_count', 'match_id', 'A', 'B', 'C', 'D', 'set_win']
+    for col in cols_to_numeric:
+        df_analysis[col] = pd.to_numeric(df_analysis[col], errors='coerce')
+
+    df_analysis = df_analysis.sort_values(by=['match_id', 'set_id', 'rally_id', 'shot_num'])
+
+    df_analysis['match_Winner_mid_cover'] = df_analysis['match_Winner_mid_cover'].astype(str).str.lower().isin(['true', '1'])
+    df_analysis['match_Loser_mid_cover'] = df_analysis['match_Loser_mid_cover'].astype(str).str.lower().isin(['true', '1'])
+
+    # 0.0 = team_Winner
+    # 1.0 = team_Loser
+    def get_player_team_logic(row):
+        pid = row['player']
+        try:
+            set_win = int(row['set_win'])
+        except:
+            return np.nan
+            
+        if set_win == 0:
+            # Team 0 = A/B (Winner), Team 1 = C/D (Loser)
+            if pid == row['A'] or pid == row['B']:
+                return 0.0
+            elif pid == row['C'] or pid == row['D']:
+                return 1.0
+        elif set_win == 1:
+            if pid == row['A'] or pid == row['B']:
+                return 1.0 
+            elif pid == row['C'] or pid == row['D']:
+                return 0.0 
+        return np.nan
+
+    df_analysis['player_team'] = df_analysis.apply(get_player_team_logic, axis=1)
+
+    df_analysis['did_opponent_team_win'] = (df_analysis['player_team'] != df_analysis['score_team'])
+    df_analysis['shots_to_end'] = df_analysis['shot_count'] - df_analysis['shot_num']
+    
+    is_lose_type = False
+    df_analysis['lose_reason'] = df_analysis['lose_reason'].astype(str).str.strip()
+    is_lose_type = df_analysis['lose_reason'].isin(selected_type)
+
+    # Definiton of Defense failure：
+    df_analysis['is_defense_failure'] = ( 
+        (df_analysis['did_opponent_team_win']) &
+        (
+            (df_analysis['shots_to_end'].isin(shot_to_end)) &
+            (is_lose_type)
+        )
+    )
+    
+    df_analysis['player_formation'] = np.where(
+        df_analysis['player_team'] == 0.0, 
+        df_analysis['match_Winner_formation'], 
+        df_analysis['match_Loser_formation']
+    )
+    
+    df_analysis['next_rally_id'] = df_analysis['rally_id'].shift(-1)
+    df_analysis['next_winner_mid_cover'] = df_analysis['match_Winner_mid_cover'].shift(-1)
+    df_analysis['next_loser_mid_cover'] = df_analysis['match_Loser_mid_cover'].shift(-1)
+    
+    conditions = [
+        (df_analysis['rally_id'] != df_analysis['next_rally_id']), 
+        (df_analysis['player_team'] == 0.0), 
+        (df_analysis['player_team'] == 1.0)
+    ]
+    
+    choices = [
+        np.nan, 
+        df_analysis['next_winner_mid_cover'],
+        df_analysis['next_loser_mid_cover']
+    ]
+    
+    df_analysis['is_reaction_cover'] = np.select(conditions, choices, default=np.nan)
+
+    return df_analysis
+
 def calculate_voronoi_vectorized(df, weight=True, decay_rate=0.021):
     
     xx_up, yy_up = np.meshgrid(np.arange(0, 61, 1), np.arange(67, 134, 1))
@@ -322,7 +386,6 @@ def calculate_voronoi_vectorized(df, weight=True, decay_rate=0.021):
     df['match_Loser_AAI'] = np.nan
 
     def calc_aai_batch(x1, y1, x2, y2, hx, hy, grid_x, grid_y):
-        # 計算網格到兩名防守球員的距離平方
         dist1 = (x1[:, None] - grid_x)**2 + (y1[:, None] - grid_y)**2
         dist2 = (x2[:, None] - grid_x)**2 + (y2[:, None] - grid_y)**2
         
@@ -393,14 +456,10 @@ def calculate_voronoi_vectorized(df, weight=True, decay_rate=0.021):
 
     return df
 
-def main_data_pipeline(input_filename: str, output_zone_angle_dir: str):
+def main_data_pipeline(df):
     """
     ADD feature and do some change for ball type
     """
-    # 1. load data
-    df = load_data(input_filename)
-    if df.empty:
-        return
         
     # 1.5. Clean return height
     print("\n--- Clean return height ---")
@@ -414,19 +473,21 @@ def main_data_pipeline(input_filename: str, output_zone_angle_dir: str):
     
     # 4. calculate partner angle
     df = process_partner_angle(df)
-    
+
     # 5. add center coverage and formation
     print("\n--- add center coverage and formation ---")
     df = add_tactical_columns(df)
-    
+    df = caculate_analysis_col(df, selected_type=['對手落地致勝', '未過網', '掛網', '出界'], shot_to_end=[1,2,3])
+    df = calculate_voronoi_vectorized(df, weight=True, decay_rate=0.021)
+
     # 6. determine the direction of ball height
     df = process_ball_height_dir(df)
     
-    # 7. output the final result
-    df.to_csv(output_zone_angle_dir, index=False)
-    print(f"\nFinal output location: '{output_zone_angle_dir}'")
     print("\n--- Final data validation (first few rows) ---")
     print(df[['shot_id', 'player', 'ball_type', 'Hitting_Zone', 'Partner_Angle', 'Angle_Bin', 'ball_up_down']].head())
+    
+    return df
+
 
 
 def add_tactical_columns(df_in, 
@@ -498,9 +559,6 @@ def add_tactical_columns(df_in,
     D_in_top = check_in_zone('player_D_x', 'player_D_y', MID_Y_TOP, MID_Y_TOP_RANGE)
     df['match_Loser_mid_cover'] = np.where(team_CD_is_bottom, (C_in_bottom | D_in_bottom), (C_in_top | D_in_top))
     
-    # 8. calculate the Voronoi-based TLAI for both winner and loser
-    df = calculate_voronoi_vectorized(df, weight=True, decay_rate=0.021)
-
     if 'rally_id' in df.columns and 'shot_id' in df.columns:
         df['shot_count'] = df.groupby('rally_id')['shot_id'].transform('count')
     
