@@ -17,7 +17,8 @@ DshuttleSet/
 │   │   ├── __init__.py
 │   │   ├── general_analyze.py # 一般分析邏輯 (球種分佈、擊球區間)
 │   │   ├── defensive_failure.py # 防守失敗率熱力圖分析
-│   │   |── mid_cover.py       # 中場覆蓋與反應率分析
+│   │   |── cce_analysis.py       # 中場覆蓋與反應率分析
+│   │   |── tlai_analysis.py       # 防守範圍分析
 │   │   └── matches_analyze.py   # 以Level 來區分match之分析
 │   │
 │   ├── visualization/         # 負責靜態繪圖、產生視覺化輔助圖

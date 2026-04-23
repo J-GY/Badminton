@@ -308,6 +308,91 @@ def clean_return_height(df: pd.DataFrame) -> pd.DataFrame:
     
     return df_clean
 
+def calculate_voronoi_vectorized(df, weight=True, decay_rate=0.021):
+    
+    xx_up, yy_up = np.meshgrid(np.arange(0, 61, 1), np.arange(67, 134, 1))
+    up_grid_x = xx_up.ravel()
+    up_grid_y = yy_up.ravel()
+    
+    xx_down, yy_down = np.meshgrid(np.arange(0, 61, 1), np.arange(0, 67, 1))
+    down_grid_x = xx_down.ravel()
+    down_grid_y = yy_down.ravel()
+    
+    df['match_Winner_AAI'] = np.nan
+    df['match_Loser_AAI'] = np.nan
+
+    def calc_aai_batch(x1, y1, x2, y2, hx, hy, grid_x, grid_y):
+        # 計算網格到兩名防守球員的距離平方
+        dist1 = (x1[:, None] - grid_x)**2 + (y1[:, None] - grid_y)**2
+        dist2 = (x2[:, None] - grid_x)**2 + (y2[:, None] - grid_y)**2
+        
+        mask_1 = dist1 < dist2
+        
+        if weight:
+            dist_to_hitter = np.sqrt((hx[:, None] - grid_x)**2 + (hy[:, None] - grid_y)**2)
+            weight_grid = np.exp(-decay_rate * dist_to_hitter)
+            
+            load_1 = (mask_1 * weight_grid).sum(axis=1)
+            load_2 = ((~mask_1) * weight_grid).sum(axis=1)
+        else:
+            load_1 = mask_1.sum(axis=1)
+            load_2 = (~mask_1).sum(axis=1)
+            
+        total_load = load_1 + load_2
+        total_load_safe = np.where(total_load == 0, 1, total_load)
+        
+        aai = np.abs(load_1 - load_2) / total_load_safe
+        
+        return np.where(total_load == 0, np.nan, aai)
+
+    ab_is_up = (df['player_A_y'] > 67).fillna(False)
+    ab_is_down = (~ab_is_up) & df['player_A_y'].notna()
+
+    ab_hits = (df['player_team'] == 0.0) 
+    cd_hits = (df['player_team'] == 1.0) 
+
+    mask_1 = ab_hits & ab_is_up
+    if mask_1.any():
+        df_sub = df[mask_1]
+        df.loc[mask_1, 'match_Loser_AAI'] = calc_aai_batch(
+            df_sub['player_C_x'].values, df_sub['player_C_y'].values,
+            df_sub['player_D_x'].values, df_sub['player_D_y'].values,
+            df_sub['hit_x'].values, df_sub['hit_y'].values,  
+            down_grid_x, down_grid_y                    
+        )
+
+    mask_2 = ab_hits & ab_is_down
+    if mask_2.any():
+        df_sub = df[mask_2]
+        df.loc[mask_2, 'match_Loser_AAI'] = calc_aai_batch(
+            df_sub['player_C_x'].values, df_sub['player_C_y'].values,
+            df_sub['player_D_x'].values, df_sub['player_D_y'].values,
+            df_sub['hit_x'].values, df_sub['hit_y'].values,
+            up_grid_x, up_grid_y
+        )
+
+    mask_3 = cd_hits & ab_is_up
+    if mask_3.any():
+        df_sub = df[mask_3]
+        df.loc[mask_3, 'match_Winner_AAI'] = calc_aai_batch(
+            df_sub['player_A_x'].values, df_sub['player_A_y'].values,
+            df_sub['player_B_x'].values, df_sub['player_B_y'].values,
+            df_sub['hit_x'].values, df_sub['hit_y'].values, 
+            up_grid_x, up_grid_y                        
+        )
+
+    mask_4 = cd_hits & ab_is_down
+    if mask_4.any():
+        df_sub = df[mask_4]
+        df.loc[mask_4, 'match_Winner_AAI'] = calc_aai_batch(
+            df_sub['player_A_x'].values, df_sub['player_A_y'].values,
+            df_sub['player_B_x'].values, df_sub['player_B_y'].values,
+            df_sub['hit_x'].values, df_sub['hit_y'].values,
+            down_grid_x, down_grid_y
+        )
+
+    return df
+
 def main_data_pipeline(input_filename: str, output_zone_angle_dir: str):
     """
     ADD feature and do some change for ball type
@@ -413,6 +498,9 @@ def add_tactical_columns(df_in,
     D_in_top = check_in_zone('player_D_x', 'player_D_y', MID_Y_TOP, MID_Y_TOP_RANGE)
     df['match_Loser_mid_cover'] = np.where(team_CD_is_bottom, (C_in_bottom | D_in_bottom), (C_in_top | D_in_top))
     
+    # 8. calculate the Voronoi-based TLAI for both winner and loser
+    df = calculate_voronoi_vectorized(df, weight=True, decay_rate=0.021)
+
     if 'rally_id' in df.columns and 'shot_id' in df.columns:
         df['shot_count'] = df.groupby('rally_id')['shot_id'].transform('count')
     
