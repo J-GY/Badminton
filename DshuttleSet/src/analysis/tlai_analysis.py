@@ -76,10 +76,9 @@ def analyze_defense_aai(df_analysis, shots_to_end_limit=2, selected_type=['對�
     df_def['AAI_squared'] = df_def['AAI_scaled_10x'] ** 2
     
     X = df_def[['AAI_scaled_10x', 'AAI_squared']]
-    X = sm.add_constant(X) # 加上截距項 (Intercept)
+    X = sm.add_constant(X) 
     Y = df_def['is_defender_failure'].astype(int)
 
-    # 3. 執行迴歸模型
     log_reg_nonlinear = sm.Logit(Y, X).fit(disp=0) 
     
     print(log_reg_nonlinear.summary().tables[1])

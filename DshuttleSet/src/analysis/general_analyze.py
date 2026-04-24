@@ -221,7 +221,6 @@ def plot_badminton_up_down_analysis(
         save_dir_bar (str): 柱狀圖存檔目錄
     """
     
-    # --- 0. 預設參數設定 ---
     if column_map is None:
         column_map = {
             'Angle': 'Partner_Angle',
@@ -258,7 +257,6 @@ def plot_badminton_up_down_analysis(
     y_mapping = {cat: i for i, cat in enumerate(Y_CATEGORIES)}
     colors_list = {'Offensive Shot': 'red', 'Defensive Shot': 'blue', 'Other Shot': 'green'} 
 
-    # --- 1. 設定中文字體 ---
     try:
         font_path = fm.findfont(fm.FontProperties(family='Microsoft JhengHei'))
         font_prop = fm.FontProperties(fname=font_path)
@@ -268,7 +266,6 @@ def plot_badminton_up_down_analysis(
     plt.rcParams['axes.unicode_minus'] = False 
 
 
-    # --- 2. 數據清洗與轉換 ---
     try:
         df = pd.DataFrame()
         df['Angle'] = df_raw[column_map['Angle']]
@@ -279,7 +276,6 @@ def plot_badminton_up_down_analysis(
         
         initial_count = len(df)
         
-        # 核心過濾邏輯
         df = df[df['Angle'] != -404.0]
         df = df[~df['BallType'].isin(filter_ball_types)]
         df.dropna(subset=['Angle', 'Zone', 'ShotType', 'BallType'], inplace=True)
@@ -300,7 +296,6 @@ def plot_badminton_up_down_analysis(
         return
 
 
-    # --- 3. 數據處理 (Aggregation) ---
     df_agg = df.groupby(['Angle', 'Zone', 'ShotType']).agg(
         Count=('Count', 'sum')
     ).reset_index()
@@ -416,7 +411,6 @@ def analyze_badminton_rally_stats(
             - rally_lengths_df: 每個回合的拍數明細
     """
     
-    # 0. 預設參數設定
     if event_mapping is None:
         # event_mapping = {1: "男雙", 2: "女雙", 3: "混雙"}
         event_mapping = {1: "MD", 2: "WD", 3: "XD"}
@@ -428,17 +422,13 @@ def analyze_badminton_rally_stats(
         print(f"Error: Required columns not found in DataFrame: {missing_cols}")
         return None, None
 
-    # 1. 複製資料避免改動原始 df，並定義項目對應
     df = df_raw.copy()
     df['event_name'] = df[event_col].map(event_mapping)
     
-    # 處理未對應到的值（可選）
     df['event_name'] = df['event_name'].fillna('未知項目')
 
-    # 2. 核心邏輯：計算「每一個 Rally」分別有多少拍
     rally_lengths = df.groupby(['event_name', rally_col])[shot_col].nunique().reset_index(name='shots_in_this_rally')
 
-    # 3. 針對「回合長度」進行統計
     summary = rally_lengths.groupby('event_name')['shots_in_this_rally'].agg(
         total_rallies='count',
         total_shots='sum',
@@ -447,7 +437,6 @@ def analyze_badminton_rally_stats(
         min_shots='min' 
     ).reset_index()
 
-    # 4. 輸出結果與全體統計
     print("=== Badminton Rally/Shot Statistics ===")
     print(summary.round(2).to_string(index=False))
 
@@ -502,18 +491,15 @@ def analyze_badminton_shot_distribution(
     if cols_order is None:
         cols_order = ['MD', 'WD', 'XD', 'Total']
 
-    # 檢查必備欄位是否存在
     required_cols = [event_col, shot_type_col]
     missing_cols = [col for col in required_cols if col not in df_raw.columns]
     if missing_cols:
         print(f"Error: Required columns not found in DataFrame: {missing_cols}")
         return None
 
-    # 1. 複製資料並定義名稱
     df = df_raw.copy()
     df['event_name'] = df[event_col].map(event_mapping)
 
-    # 2. 建立基礎數據表 (Count)
     df_count = pd.crosstab(
         df[shot_type_col], 
         df['event_name'], 
@@ -521,25 +507,19 @@ def analyze_badminton_shot_distribution(
         margins_name='Total' 
     )
 
-    # 3. 確保欄位順序 (動態過濾掉資料中沒有的項目)
     available_cols = [c for c in cols_order if c in df_count.columns]
     df_count = df_count[available_cols]
 
-    # 4. 計算百分比表 (Percentage)
     df_pct = df_count.div(df_count.loc['Total'], axis=1) * 100
 
-    # 5. 合併「數量」與「百分比」格式
     df_formatted = pd.DataFrame()
     for col in df_count.columns:
         df_formatted[col] = [f"{int(c)} ({p:.2f}%)" for c, p in zip(df_count[col], df_pct[col])]
 
-    # 補回索引 (球種名稱)
     df_formatted.index = df_count.index
 
-    # 6. 依照指定球種順序排列 (Rows)
     df_final = df_formatted.reindex(ball_order).fillna("0 (0.00%)")
 
-    # 7. 處理最下方的「總共球數」列
     if 'Total' in df_count.index:
         total_row_counts = df_count.loc['Total']
         total_row_display = [f"{int(val)}" for val in total_row_counts] 

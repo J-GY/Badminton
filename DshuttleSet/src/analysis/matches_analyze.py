@@ -21,24 +21,19 @@ def plot_badminton_intensity(match_df, shot_df, output_name='intensity_analysis.
         level_order = ['300 & 500', '750', '1000', 'Others']
         df['merge_level'] = pd.Categorical(df['merge_level'], categories=level_order, ordered=True)
 
-        # shot number per SET with diff level (修改這裡)
+        # shot number per SET with diff level
         shot_copy = shot_df.copy()
         shot_copy['merge_level'] = shot_copy['level'].apply(merge_levels)
         
-        # 1. 算出各層級的總擊球數
         total_shots_by_level = shot_copy.groupby('merge_level').size()
         
-        # 2. 算出各層級的「總局數」，而不是總場次 (將 set_count 加總)
         total_sets_by_level = df.groupby('merge_level', observed=False)['set_count'].sum()
         
-        # 3. 相除得到平均每局擊球數
         avg_shots_per_set = (total_shots_by_level / total_sets_by_level).reindex(level_order)
 
-        # plot
         fig, ax1 = plt.subplots(figsize=(14, 8))
         sns.set_style("whitegrid") 
 
-        # x axis
         sns.stripplot(
             data=df, 
             x='merge_level', 
@@ -46,8 +41,8 @@ def plot_badminton_intensity(match_df, shot_df, output_name='intensity_analysis.
             hue='Match Type', 
             palette='Set1', 
             jitter=0.25,    
-            alpha=0.7,       # 點的顏色透明度
-            size=9,        # 點的大小
+            alpha=0.7,      
+            size=9,     
             order=level_order, 
             ax=ax1
         )
@@ -59,7 +54,7 @@ def plot_badminton_intensity(match_df, shot_df, output_name='intensity_analysis.
         # right y
         ax2 = ax1.twinx()
         
-        # avg shot per SET (修改變數名稱與標籤)
+        # avg shot per SET
         ax2.plot(
             level_order, 
             avg_shots_per_set.values, 

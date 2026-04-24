@@ -46,7 +46,6 @@ def map_ball_type_to_group(df: pd.DataFrame, classification_map: Dict[str, str])
     """
     df['ball_type'] = df['ball_type'].map(classification_map)
     
-    # 處理未映射的球種 (即 NaN)
     df['ball_type'] = df['ball_type'].fillna('未分類')
 
     print("\n--- 球種映射完成 ---")

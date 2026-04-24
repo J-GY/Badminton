@@ -11,51 +11,44 @@ from matplotlib.colors import Normalize
 from scipy.stats import chi2_contingency
 
 zone_patches = {
-    # 界外
+    # out of court zones
     13: (-10, 134, 71, 144),
     14: (-10, 113, 0, 134),   12: (61, 113, 71, 134),
     15: (-10, 90, 0, 113),  11: (61, 90, 71, 113),
     16: (-10, 67, 0, 90),  10: (61, 67, 71, 90),
     
-    # 下半場
+    # downcourt zones
     2: (0, 45, 20, 67),   7: (20, 45, 41, 67),   1: (41, 45, 61, 67),
     6: (0, 22, 20, 45),   8: (20, 22, 41, 45),   5: (41, 22, 61, 45),
     4: (0, 0, 20, 22),      9: (20, 0, 41, 22),      3: (41, 0, 61, 22),
     
-    # Zone -1 錯誤區域
+    # error Zone -1 
     -1: (0, 67.1, 61, 134)
 }
 
 def draw_court_background_green(ax, full_wid=61.0, half_len=67.0):
-    """繪製標準羽球半場 (全綠底 + 白線風格) + 座標標記"""
-    COURT_COLOR = '#90C080'      # 綠色底
-    LINE_COLOR = 'white'         # 白色界線
-    lw = 2 # 線條粗細
+    COURT_COLOR = '#90C080' 
+    LINE_COLOR = 'white'        
+    lw = 2 
 
     ax.set_facecolor(COURT_COLOR)
 
-    # 外框
     rect = Rectangle((0, 0), full_wid, half_len, linewidth=lw, edgecolor=LINE_COLOR, facecolor='none', zorder=1)
     ax.add_patch(rect)
     
-    # 單打邊線
     margin = 4.6
     ax.plot([margin, margin], [0, half_len], color=LINE_COLOR, linewidth=lw, zorder=1)
     ax.plot([full_wid-margin, full_wid-margin], [0, half_len], color=LINE_COLOR, linewidth=lw, zorder=1)
     
-    # 後發球線
     long_service_dist = 7.6
     ax.plot([0, full_wid], [long_service_dist, long_service_dist], color=LINE_COLOR, linewidth=lw, zorder=1)
     
-    # 短發球線
     short_service_y = half_len - 19.8
     ax.plot([0, full_wid], [short_service_y, short_service_y], color=LINE_COLOR, linewidth=lw, zorder=1)
     
-    # 中線
     mid_x = full_wid / 2
     ax.plot([mid_x, mid_x], [0, short_service_y], color=LINE_COLOR, linewidth=lw, zorder=1)
 
-    # 座標標記
     text_style = {'color': 'white', 'fontsize': 10, 'fontweight': 'bold', 'zorder': 5}
     offset = 1.0
     ax.text(0 - offset, 0 - offset, '(0,0)', ha='right', va='top', **text_style)
@@ -63,12 +56,10 @@ def draw_court_background_green(ax, full_wid=61.0, half_len=67.0):
     ax.text(0 - offset, half_len + offset, '(0,67)', ha='right', va='bottom', **text_style)
 
 def draw_failure_heatmap_green(ax, failure_rate, total_attempts, total_failures, title, cmap_name='Reds'):
-    # 1. 畫出綠底白線球場
     draw_court_background_green(ax, full_wid=61.0, half_len=67.0)
     
     valid_zones = [1, 2, 3, 4, 5, 6, 7, 8, 9]
     
-    # 【關鍵修改 1】強制將色階的最大值 (vmax) 設為 12
     norm = Normalize(vmin=0, vmax=12) 
     cmap = plt.get_cmap(cmap_name)
     
@@ -84,17 +75,14 @@ def draw_failure_heatmap_green(ax, failure_rate, total_attempts, total_failures,
             w, h = x2-x, y2-y
             color = cmap(norm(rate))
             
-            # zorder=0.5 讓色塊墊在白線下；edgecolor='none' 移除原本的白色邊框
             rect = Rectangle((x, y), w, h, facecolor=color, edgecolor='none', alpha=0.85, zorder=0.5)
             ax.add_patch(rect)
             
             if count > 0:
                 label = f"{rate:.1f}%\n({int(fail_count)}/{int(count)})"
                 
-                # 【關鍵修改 2】因為 vmax 是 12，所以超過 7% 時底色就很深了，把文字換成白色以增加辨識度
                 text_color = 'white' if rate > 7 else 'black' 
                 
-                # zorder=6 確保文字浮在最上層
                 ax.text(x + w/2, y + h/2, label, ha='center', va='center', 
                         color=text_color, fontsize=10, weight='bold', zorder=6)
                         
@@ -103,9 +91,6 @@ def draw_failure_heatmap_green(ax, failure_rate, total_attempts, total_failures,
     ax.set_ylim(-2, 70)
     ax.set_aspect('equal')
     ax.axis('off')
-# ---------------------------------------------------------
-# 3. 防守失敗率分析函數 (Strictly Matched with Loss Heatmap)
-# ---------------------------------------------------------
 
 def analyze_defensive_failure_rate(df, match_id=None, set_num=None, 
                                    start_rally_id=None, end_rally_id=None, event_type=None):
@@ -116,10 +101,9 @@ def analyze_defensive_failure_rate(df, match_id=None, set_num=None,
         )
     except NameError:
         df_filtered = df.copy()
-        filter_suffix = "Analysis"
     
     if df_filtered.empty:
-        print("無符合條件的數據。")
+        print("No matching data found.")
         return
         
     cols = ['shot_num', 'shot_count', 'score_team', 'set_win', 'match_id', 'player', 'A', 'B', 'C', 'D']
@@ -134,10 +118,6 @@ def analyze_defensive_failure_rate(df, match_id=None, set_num=None,
         
     if reason_col in df_filtered.columns:
         df_filtered[reason_col] = df_filtered[reason_col].astype(str).str.strip()
-        
-    if 'match_Winner_formation' not in df_filtered.columns:
-        print("警告: 缺少陣型欄位，請先執行 add_tactical_columns。")
-        return
 
     last_shots = df_filtered[df_filtered['shot_num'] == df_filtered['shot_count']].copy()
     if 'score_team' not in last_shots.columns and 'score_team_x' in last_shots.columns:
@@ -197,7 +177,7 @@ def analyze_defensive_failure_rate(df, match_id=None, set_num=None,
             norm_list.append(sub)
             
     if not norm_list: 
-        print("無有效座標數據。")
+        print("No valid coordinate data found.")
         return
     df_norm = pd.concat(norm_list)
 
@@ -208,7 +188,7 @@ def analyze_defensive_failure_rate(df, match_id=None, set_num=None,
     try:
         df_norm['zone_id'] = df_norm.apply(lambda r: get_zone_id(r['heatmap_x'], r['heatmap_y']), axis=1)
     except NameError:
-        print("錯誤: 找不到 get_zone_id 函數")
+        print("Error: get_zone_id function not found")
         return
     
     all_zones = [1, 2, 3, 4, 5, 6, 7, 8, 9]
